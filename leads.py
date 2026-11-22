@@ -30,6 +30,11 @@ def create_lead(data):
     s.commit()
     lead_id = lead.id
     s.close()
+    try:
+        from notify import notify_new_lead
+        notify_new_lead(lead_id, data)
+    except Exception as e:
+        print("NOTIFY ERROR:", str(e)[:200])
     return lead_id
 
 

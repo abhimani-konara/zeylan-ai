@@ -93,6 +93,9 @@ def post_lead(lead: LeadIn):
         raise HTTPException(status_code=400, detail="Customer consent is required before saving an enquiry.")
     if not lead.email and not lead.whatsapp_number:
         raise HTTPException(status_code=400, detail="Provide an email or a WhatsApp number.")
+    from leads import validate_contact
+    if validate_contact(lead.email, lead.whatsapp_number):
+        raise HTTPException(status_code=400, detail="The email address or WhatsApp number does not look valid.")
     data = lead.model_dump()
     data.pop("consent")
     lead_id = create_lead(data)
@@ -101,6 +104,13 @@ def post_lead(lead: LeadIn):
         "lead_status": "New Enquiry",
         "message": "Enquiry saved. A travel executive will contact you.",
     }
+
+
+@app.get("/api/leads")
+def list_leads_endpoint(status: Optional[str] = None, limit: int = 50, x_admin_key: Optional[str] = Header(default=None)):
+    require_admin(x_admin_key)
+    from leads import list_leads
+    return {"leads": list_leads(status, min(max(limit, 1), 200))}
 
 
 @app.get("/api/leads/{lead_id}")

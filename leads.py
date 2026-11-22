@@ -33,6 +33,17 @@ def create_lead(data):
     return lead_id
 
 
+def list_leads(status=None, limit=50):
+    s = SessionLocal()
+    q = s.query(CustomerLead)
+    if status:
+        q = q.filter(CustomerLead.lead_status == status)
+    rows = q.order_by(CustomerLead.id.desc()).limit(limit).all()
+    result = [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+    s.close()
+    return result
+
+
 def get_lead(lead_id):
     s = SessionLocal()
     lead = s.get(CustomerLead, lead_id)

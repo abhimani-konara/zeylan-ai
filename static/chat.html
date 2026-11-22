@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeylan AI</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; font-family: Arial, Helvetica, sans-serif; background: #ffffff; color: #1f2937; }
+  .app { display: flex; flex-direction: column; height: 100%; }
+  .header { background: #0f766e; color: #ffffff; padding: 12px 14px; font-weight: bold; }
+  .header small { display: block; font-weight: normal; opacity: 0.9; font-size: 11px; margin-top: 2px; }
+  .messages { flex: 1; overflow-y: auto; padding: 12px; background: #f3f4f6; }
+  .msg { max-width: 85%; padding: 8px 12px; margin: 6px 0; border-radius: 12px; font-size: 14px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
+  .bot { background: #ffffff; border: 1px solid #e5e7eb; }
+  .user { background: #0f766e; color: #ffffff; margin-left: auto; }
+  .typing { font-style: italic; color: #6b7280; }
+  .consent { padding: 8px 12px; font-size: 12px; background: #fffbeb; border-top: 1px solid #fde68a; }
+  .consent label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+  .inputbar { display: flex; gap: 8px; padding: 10px; border-top: 1px solid #e5e7eb; }
+  .inputbar input { flex: 1; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; }
+  .inputbar button { padding: 10px 16px; background: #0f766e; color: #ffffff; border: 0; border-radius: 8px; font-size: 14px; cursor: pointer; }
+  .inputbar button:disabled { opacity: 0.6; cursor: not-allowed; }
+  .note { font-size: 10px; color: #6b7280; padding: 0 12px 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; background: #f3f4f6; border-top: 1px solid #e5e7eb; }
+  .chip { background: #ffffff; color: #0f766e; border: 1px solid #0f766e; border-radius: 16px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  .chip:hover { background: #ecfdf5; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">Zeylan AI<small>Your Sri Lanka travel assistant</small></div>
+  <div class="messages" id="messages"></div>
+  <div class="chips" id="chips"></div>
+  <div class="consent">
+    <label><input type="checkbox" id="consent"><span>I agree that Zeylan Island Holidays may save and use my details to prepare my travel enquiry.</span></label>
+  </div>
+  <div class="inputbar">
+    <input id="input" type="text" placeholder="Type your message..." maxlength="1000" autocomplete="off">
+    <button id="send">Send</button>
+  </div>
+  <div class="note">Itineraries and prices are proposals. Final price and availability are confirmed by a travel executive.</div>
+</div>
+<script>
+(function () {
+  var messages = document.getElementById("messages");
+  var input = document.getElementById("input");
+  var sendBtn = document.getElementById("send");
+  var consent = document.getElementById("consent");
+
+  function makeId() {
+    if (window.crypto && window.crypto.randomUUID) { return window.crypto.randomUUID(); }
+    return "s" + Date.now() + "-" + Math.random().toString(36).slice(2, 12);
+  }
+  var sessionId = makeId();
+
+  function addMessage(text, who) {
+    var d = document.createElement("div");
+    d.className = "msg " + who;
+    d.textContent = text;
+    messages.appendChild(d);
+    messages.scrollTop = messages.scrollHeight;
+    return d;
+  }
+
+  addMessage("Hi! I am Zeylan AI. I can help you find a Sri Lanka holiday. What kind of trip are you looking for? Tap an option below or type your own question.", "bot");
+
+  async function send() {
+    var text = input.value.trim();
+    if (!text) { return; }
+    addMessage(text, "user");
+    chipsBox.style.display = "none";
+    input.value = "";
+    sendBtn.disabled = true;
+    var typing = addMessage("Zeylan AI is typing...", "bot typing");
+    try {
+      var res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, message: text, consent: consent.checked })
+      });
+      var data = await res.json().catch(function () { return {}; });
+      typing.remove();
+      if (res.ok && data.reply) {
+        addMessage(data.reply, "bot");
+      } else if (res.status === 503) {
+        addMessage("Sorry, I am busy right now. Please try again in a moment.", "bot");
+      } else {
+        addMessage("Sorry, something went wrong. Please try again.", "bot");
+      }
+    } catch (e) {
+      typing.remove();
+      addMessage("Sorry, I could not connect. Please check your internet and try again.", "bot");
+    }
+    sendBtn.disabled = false;
+    input.focus();
+  }
+
+  var chipsBox = document.getElementById("chips");
+  var suggestions = [
+    { label: "Short trips (up to 7 days)", text: "Show me short trips, up to 7 days" },
+    { label: "Price of Lush Getaway", text: "How much is the Lush Getaway?" },
+    { label: "All tour packages", text: "Show me all your tour packages" },
+    { label: "Plan a custom trip", text: "Help me plan a custom trip" },
+    { label: "Talk to a travel executive", text: "I want to talk to a travel executive" }
+  ];
+  suggestions.forEach(function (s) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.textContent = s.label;
+    b.addEventListener("click", function () {
+      input.value = s.text;
+      send();
+    });
+    chipsBox.appendChild(b);
+  });
+
+  sendBtn.addEventListener("click", send);
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); send(); }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+.env
+venv/
+zeylan.db
+
+.env
+venv/
+zeylan.db
+__pycache__/
+*.pyc
+*.pdf

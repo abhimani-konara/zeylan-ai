@@ -6,7 +6,7 @@ from google.genai import types
 
 import tools
 import itinerary
-from leads import create_lead
+from leads import create_lead, validate_contact
 
 load_dotenv()
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
@@ -95,6 +95,12 @@ def modify_itinerary(itinerary_id: int, add: Optional[list[str]] = None, remove:
     return result
 
 
+def check_contact(email: Optional[str] = None, whatsapp_number: Optional[str] = None) -> dict:
+    """Check that an email address or WhatsApp number typed by the customer looks valid. Call this as soon as the customer gives one."""
+    problem = validate_contact(email, whatsapp_number)
+    return problem or {"status": "OK"}
+
+
 def save_enquiry(
     customer_name: str,
     consent_given: bool,
@@ -111,6 +117,9 @@ def save_enquiry(
     """Save a customer enquiry for the travel team. Needs the customer's name, an email or WhatsApp number, the number of adults, the number of children and approximate travel dates. consent_given must be true only if the customer clearly agreed to save and share their details."""
     if not email and not whatsapp_number:
         return {"status": "CONTACT_REQUIRED", "message": "An email or WhatsApp number is required."}
+    problem = validate_contact(email, whatsapp_number)
+    if problem:
+        return problem
     if adults is None or children is None or not arrival_date:
         return {"status": "DETAILS_REQUIRED", "message": "Before saving, ask the customer for the number of adults, the number of children and approximate travel dates, one question at a time. Then call save_enquiry again."}
     if not consent_given:
@@ -134,7 +143,7 @@ def main():
     client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM_PROMPT,
-        tools=[search_packages, get_package_price, build_itinerary, modify_itinerary, list_destinations, save_enquiry],
+        tools=[search_packages, get_package_price, build_itinerary, modify_itinerary, list_destinations, check_contact, save_enquiry],
     )
     chat = client.chats.create(model=MODEL, config=config)
     print("Zeylan AI is ready. Type exit to quit.")

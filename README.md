@@ -1,78 +1,100 @@
-# DSA-Stack-Queue-GameMatch-RobotUndo
+# Zeylan AI
 
-> Data Structures & Algorithms — Stack and Queue real-world implementations in Java.
+A chat assistant for Zeylan Island Holidays (Sri Lanka tours). It answers questions about tour packages, drafts simple itineraries, and passes customer enquiries to the travel team.
 
----
+This is a working demo. Packages, prices, stay nights and travel times are placeholder data, to be replaced with approved company data.
 
-## 📌 Project Overview
+## What it does
 
-This project demonstrates the practical application of two fundamental data structures:
+- Answers package questions using a database. Prices come only from the price tool, never from the AI's own knowledge.
+- If a package has no approved current price, it says a travel executive will prepare a quotation.
+- Builds and changes proposed itineraries (destinations and nights), with warnings for unverified routes.
+- Collects an enquiry (name, email or WhatsApp number, adults, children, travel dates) one question at a time, and saves it only after the customer ticks a consent checkbox.
+- Cannot confirm bookings, take payments or approve discounts. It always says that prices and itineraries are proposals confirmed by a travel executive.
 
-- **Stack (LIFO)** — Used in a **Robot Movement Undo System**
-- **Queue (FIFO)** — Used in an **Online Game Matchmaking System**
+## Safety rules built into the code
 
-Both scenarios are implemented in Java and showcase how these structures solve real-world problems efficiently.
+- Prices: only from `get_package_price`. If the status is `PRICE_UNAVAILABLE`, no price is shown.
+- Consent: the enquiry is saved only when the consent checkbox is ticked. The consent time is stored with the lead.
+- Required details: an enquiry is not saved without a contact, adults, children and travel dates.
+- Contact checks: email addresses and WhatsApp numbers are checked for a valid format (international numbers are accepted). The format is checked, not whether the number exists.
+- Staff access: reading leads needs an admin key sent in the `X-Admin-Key` header.
+- Itineraries have no approved price. The assistant offers a quotation by the travel team instead.
 
----
+## Project files
 
-## 🤖 Scenario 1 — Robot Movement Undo System (Stack)
+| File | Purpose |
+| --- | --- |
+| `main.py` | FastAPI app: package, lead, itinerary and chat endpoints |
+| `chat_service.py` | Chat used by the web page (prompt, tools, consent handling) |
+| `chat_agent.py` | Tool functions, and a terminal version of the chat for testing |
+| `tools.py` | Package search and price lookup |
+| `itinerary.py` | Itinerary building, changing and validation |
+| `leads.py` | Saving, reading and listing leads, contact validation |
+| `db.py` | Database models (SQLite) |
+| `seed.py`, `seed_prices.py` | Load demo packages and prices |
+| `static/chat.html` | Chat page. `static/widget.js` is a chat bubble for a website |
 
-A robot navigates a 7×7 grid starting at the center cell (3,3). Every move (UP, DOWN, LEFT, RIGHT) is pushed onto a stack. The undo operation pops the most recent command and applies the inverse direction, restoring the robot to its previous position.
+## Setup (Windows PowerShell)
 
-**Core Operations Used:**
-- `push(x)` — Add move to the top of the stack
-- `pop()` — Remove and return the last move
-- `peek()` — View the top move without removing it
+```powershell
+python -m venv venv
+venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
 
----
+Create a file named `.env` in the project folder:
 
-## 🎮 Scenario 2 — Online Game Matchmaking (Queue)
+Never commit `.env`. It is listed in `.gitignore`.
 
-Players waiting for an online game session are managed using a custom array-backed Queue. Each player has a Username, Rank, and Level. Players join via `enqueue()` (FIFO order) and are matched using `dequeue()`, ensuring the longest-waiting player is served first.
+Load the demo data once:
 
-**Core Operations Used:**
-- `enqueue(x)` — Add player to the rear of the queue
-- `dequeue()` — Remove and return the player from the front
-- `peek()` — View the front player without removing
-- `isEmpty()` / `isFull()` — Queue state checks
+```powershell
+python seed.py
+python seed_prices.py
+```
 
----
+## Run
 
-## 🚀 How to Run
+```powershell
+python -m uvicorn main:app --reload
+```
 
-### Prerequisites
-- Java JDK 8 or above
-- IntelliJ IDEA (recommended) or any Java IDE
+Open http://127.0.0.1:8000/static/chat.html to chat.
 
-### Steps
+If you change `.env`, stop the server (Ctrl+C) and start it again.
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/abhimani-konara/DSA-Stack-Queue-GameMatch-RobotUndo.git
-   ```
+## Main endpoints
 
-2. **Open in IntelliJ IDEA**
-   - File → Open → Select the project folder
+| Method and path | Access | Purpose |
+| --- | --- | --- |
+| `GET /api/packages` | public | List packages |
+| `GET /api/packages/{id}/pricing` | public | Approved price for a package |
+| `POST /api/chat` | public | Chat message |
+| `POST /api/leads` | public | Save an enquiry (needs consent) |
+| `GET /api/leads` | admin key | List enquiries (`?status=` and `?limit=`) |
+| `GET /api/leads/{id}` | admin key | One enquiry |
+| `POST /api/itineraries` | public | Create an itinerary |
+| `PATCH /api/itineraries/{id}` | public | Change an itinerary |
 
-3. **Run the project**
-   - Navigate to `src/` folder
-   - Run the `Main.java` file
+Example, reading new enquiries as staff:
 
----
+```powershell
+$key = "your ADMIN_API_KEY"
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/leads?status=New%20Enquiry" -Headers @{ "X-Admin-Key" = $key }
+```
 
-## 👥 Group Members
+## Tests
 
-| Student ID |
-|------------|
-| KIC-HNDCSAI-261-F-001 |
-| KIC-HNDCSAI-261-F-004 |
-| KIC-HNDCSAI-261-F-014 |
-| KIC-HNDCSAI-261-F-028 |
+```powershell
+python test_tools.py
+python test_itinerary.py
+```
 
----
+## Known limits and next steps
 
-## 🏫 Institution
-
-**NIBM City University — Kandy Innovation Center**  
-HND in Computing & AI — Group 10  
-Module: Data Structures & Algorithms
+- Package, price, stay-night and travel-time data are placeholders.
+- Staff access is a single shared admin key. A real deployment needs HTTPS and a login for each staff member.
+- Saving an enquiry does not notify anyone yet. Staff read new enquiries from the endpoint above. Email or WhatsApp alerts are a next step.
+- The database is a local SQLite file. A production setup needs a hosted database and backups.
+- Itineraries use simple rules and carry no prices.

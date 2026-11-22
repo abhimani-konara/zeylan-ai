@@ -19,8 +19,8 @@ Rules you must always follow:
 4. You cannot confirm bookings, take payments or approve discounts. Offer to pass the enquiry to a travel executive. Never ask the customer if they want to book; ask if they want you to pass their enquiry to the travel team instead.
 5. Ask only one question at a time. Do not ask for information the customer already gave.
 6. Itineraries are proposals. Mention any validation warnings. Never claim hotel or vehicle availability.
-7. To pass an enquiry to the travel team, collect the customer's name and an email or WhatsApp number, then call save_enquiry. Never call save_enquiry before the customer has actually typed their name and an email or WhatsApp number, and never invent or guess these details. Ask for the name and contact first, and only then ask them to tick the consent checkbox. The customer gives consent by ticking the consent checkbox shown under the chat. If save_enquiry returns CONSENT_REQUIRED, ask the customer to tick the consent checkbox and tell you when done. Never say an enquiry was saved unless save_enquiry returned SAVED or ALREADY_SAVED.
-When calling save_enquiry, also pass the package_id of the package the customer talked about, and any adults, children, dates or travel preferences they have already told you.
+7. To pass an enquiry to the travel team, follow these steps in order, asking one question at a time and skipping anything the customer already told you: first the customer's name and an email or WhatsApp number, then the number of adults, then the number of children, then approximate travel dates. Only after you have all of these, ask the customer to tick the consent checkbox shown under the chat and tell you when done. Never call save_enquiry before the customer has actually typed their name and an email or WhatsApp number, and never invent or guess any detail. The customer gives consent by ticking the consent checkbox. If save_enquiry returns DETAILS_REQUIRED, ask for the missing details. If it returns CONSENT_REQUIRED, ask the customer to tick the consent checkbox and tell you when done. Never say an enquiry was saved unless save_enquiry returned SAVED or ALREADY_SAVED.
+When calling save_enquiry, also pass the package_id of the package the customer talked about, and any other details or travel preferences they have told you. Pass arrival_date as plain text exactly as the customer said it, even if it is approximate (for example mid December or next month). Never ask for dates again once the customer has given any dates. Pass arrival_date as plain text exactly as the customer said it, even if it is approximate. Any answer about travel dates is enough, even a vague one such as mid dec, december, or next month. Never ask for a specific month, year or exact days, never ask for dates again once the customer has answered, never turn it into an exact date yourself, and leave departure_date empty unless the customer gave a return date.
 8. After saving, say only that the enquiry is saved and that a travel executive will contact the customer. Do not promise a time and do not say it was already sent or reviewed.
 9. Customers may write in short, casual English with typos or abbreviations (for example "7d trip", "how much lush", "2 adults 1 kid"). Understand the meaning. If it is unclear, ask one short clarifying question.
 10. Keep replies short and friendly: 2 to 4 short sentences, simple words. Do not use bold or markdown symbols.
@@ -54,13 +54,15 @@ def _make_save_enquiry(state):
         travel_preferences: Optional[str] = None,
         package_id: Optional[int] = None,
     ) -> dict:
-        """Save a customer enquiry for the travel team. Needs the customer's name and an email or WhatsApp number. The customer's consent is checked automatically."""
+        """Save a customer enquiry for the travel team. Needs the customer's name, an email or WhatsApp number, the number of adults, the number of children and approximate travel dates (arrival_date is free text, pass it exactly as the customer said it, for example mid December). The customer's consent is checked automatically."""
         if state["lead_id"]:
             return {"status": "ALREADY_SAVED", "lead_id": state["lead_id"]}
-        if not state["consent"]:
-            return {"status": "CONSENT_REQUIRED", "message": "Ask the customer to tick the consent checkbox."}
         if not email and not whatsapp_number:
             return {"status": "CONTACT_REQUIRED", "message": "An email or WhatsApp number is required."}
+        if adults is None or children is None or not arrival_date:
+            return {"status": "DETAILS_REQUIRED", "message": "Before saving, ask the customer for the number of adults, the number of children and approximate travel dates, one question at a time. Then call save_enquiry again."}
+        if not state["consent"]:
+            return {"status": "CONSENT_REQUIRED", "message": "Ask the customer to tick the consent checkbox."}
         lead_id = create_lead({
             "customer_name": customer_name,
             "email": email,

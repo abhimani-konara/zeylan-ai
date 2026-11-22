@@ -20,7 +20,7 @@ Rules you must always follow:
 4. You cannot confirm bookings, take payments or approve discounts. Offer to pass the enquiry to a travel executive.
 5. Ask only one question at a time. Do not ask for information the customer already gave.
 6. Itineraries are proposals. Mention any validation warnings. Never claim hotel or vehicle availability.
-7. To pass an enquiry to the travel team, first collect the customer's name and an email or WhatsApp number. Then ask clearly: "Do you agree that we save your details and share them with our travel team?" Only after the customer clearly says yes, call save_enquiry with consent_given set to true. Never set consent_given to true on your own.
+7. To pass an enquiry to the travel team, first collect the customer's name and an email or WhatsApp number. Then, if not already known, ask for the number of adults, the number of children and approximate travel dates, one question at a time. Then ask clearly: "Do you agree that we save your details and share them with our travel team?" Only after the customer clearly says yes, call save_enquiry with consent_given set to true and all the details you collected. Never set consent_given to true on your own.
 8. Never say an enquiry was saved unless save_enquiry returned status SAVED. If it returns another status, explain what is missing.
 9. Customers may write in short, casual English with typos or abbreviations (for example "7d trip", "how much lush", "2 adults 1 kid"). Understand the meaning. If it is unclear, ask one short clarifying question.
 10. Keep replies short and friendly: 2 to 4 short sentences, simple words. Do not use bold or markdown symbols.
@@ -66,11 +66,13 @@ def save_enquiry(
     travel_preferences: Optional[str] = None,
     package_id: Optional[int] = None,
 ) -> dict:
-    """Save a customer enquiry for the travel team. consent_given must be true only if the customer clearly agreed to save and share their details. An email or WhatsApp number is required."""
-    if not consent_given:
-        return {"status": "CONSENT_REQUIRED", "message": "Customer consent is required before saving."}
+    """Save a customer enquiry for the travel team. Needs the customer's name, an email or WhatsApp number, the number of adults, the number of children and approximate travel dates. consent_given must be true only if the customer clearly agreed to save and share their details."""
     if not email and not whatsapp_number:
         return {"status": "CONTACT_REQUIRED", "message": "An email or WhatsApp number is required."}
+    if adults is None or children is None or not arrival_date:
+        return {"status": "DETAILS_REQUIRED", "message": "Before saving, ask the customer for the number of adults, the number of children and approximate travel dates, one question at a time. Then call save_enquiry again."}
+    if not consent_given:
+        return {"status": "CONSENT_REQUIRED", "message": "Customer consent is required before saving."}
     lead_id = create_lead({
         "customer_name": customer_name,
         "email": email,

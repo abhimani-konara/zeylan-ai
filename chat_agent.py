@@ -40,16 +40,58 @@ def get_package_price(package_id: int) -> dict:
     return tools.get_package_price(package_id)
 
 
-def build_itinerary(destinations: list[str]) -> dict:
-    """Create a new itinerary from an ordered list of destination names (for example Colombo, Sigiriya, Kandy)."""
-    return itinerary.create_itinerary(destinations)
+def _fit_nights(names, trip_days):
+    total = trip_days - 1
+    if total < 1 or not names:
+        return {"error": "INVALID_TRIP_LENGTH", "message": "A trip needs at least 2 days and 1 destination."}
+    if len(names) > total:
+        return {"error": "TOO_MANY_DESTINATIONS", "message": "Only " + str(total) + " night(s) fit in " + str(trip_days) + " days, so at most " + str(total) + " destinations. Tell the customer and ask which destination to drop or whether they want more days."}
+    nights = {n: itinerary.STAY_NIGHTS.get(n, 1) for n in names}
+    while sum(nights.values()) > total:
+        biggest = max(nights, key=lambda k: nights[k])
+        nights[biggest] -= 1
+    i = 0
+    while sum(nights.values()) < total:
+        nights[names[i % len(names)]] += 1
+        i += 1
+    return {"nights": nights}
 
 
-def modify_itinerary(itinerary_id: int, add: Optional[list[str]] = None, remove: Optional[list[str]] = None, note: Optional[str] = None) -> dict:
-    """Change an existing itinerary by adding or removing destinations. This creates a new version."""
-    result = itinerary.modify_itinerary(itinerary_id, add=add, remove=remove, note=note or "")
+def build_itinerary(destinations: list[str], trip_days: Optional[int] = None) -> dict:
+    """Create a new itinerary from an ordered list of destination names (use only names from list_destinations). Pass trip_days, the number of days the customer asked for, so the nights are fitted automatically (a trip of N days has N minus 1 nights)."""
+    if not trip_days:
+        return itinerary.create_itinerary(destinations)
+    fitted = _fit_nights(destinations, trip_days)
+    if "error" in fitted:
+        return fitted
+    created = itinerary.create_itinerary(destinations)
+    result = itinerary.modify_itinerary(created["itinerary_id"], nights=fitted["nights"], note="fitted to " + str(trip_days) + " days") or created
+    result["total_days"] = result["total_nights"] + 1
+    return result
+
+
+def list_destinations() -> list:
+    """List the destinations that itineraries can use, with the default number of nights for each. Call this before planning a trip."""
+    return [{"destination": n, "default_nights": v} for n, v in itinerary.STAY_NIGHTS.items()]
+
+
+def modify_itinerary(itinerary_id: int, add: Optional[list[str]] = None, remove: Optional[list[str]] = None, set_nights_for: Optional[str] = None, new_nights: Optional[int] = None, trip_days: Optional[int] = None, note: Optional[str] = None) -> dict:
+    """Change an existing itinerary by adding or removing destinations, or by setting the number of nights for one destination (set_nights_for and new_nights), or pass trip_days, the number of days the customer now wants, so the nights are fitted automatically. This creates a new version."""
+    nights = {set_nights_for: new_nights} if set_nights_for and new_nights else None
+    if trip_days:
+        current = itinerary.get_itinerary(itinerary_id)
+        if current is None:
+            return {"error": "Itinerary not found"}
+        names = [x["destination"] for x in current["versions"][-1]["stops"]]
+        names = [n for n in names if n not in (remove or [])] + list(add or [])
+        fitted = _fit_nights(names, trip_days)
+        if "error" in fitted:
+            return fitted
+        nights = fitted["nights"]
+    result = itinerary.modify_itinerary(itinerary_id, add=add, remove=remove, nights=nights, note=note or "")
     if result is None:
         return {"error": "Itinerary not found"}
+    result["total_days"] = result["total_nights"] + 1
     return result
 
 
@@ -92,7 +134,7 @@ def main():
     client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM_PROMPT,
-        tools=[search_packages, get_package_price, build_itinerary, modify_itinerary, save_enquiry],
+        tools=[search_packages, get_package_price, build_itinerary, modify_itinerary, list_destinations, save_enquiry],
     )
     chat = client.chats.create(model=MODEL, config=config)
     print("Zeylan AI is ready. Type exit to quit.")
